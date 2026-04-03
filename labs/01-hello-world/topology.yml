@@ -1,0 +1,36 @@
+name: 01-hello-world
+
+# Management network shared across all nodes.
+# Containerlab assigns IPs automatically from this subnet.
+mgmt:
+  network: clab-mgmt
+  ipv4-subnet: 172.20.20.0/24
+
+topology:
+  nodes:
+
+    # Arista cEOS-lab node
+    # Image tag must match what you imported. Examples:
+    #   docker import cEOS-lab-4.32.0F.tar.xz ceos:4.32.0F
+    #   docker import cEOS-lab-4.35.3F.tar.xz ceos:latest
+    ceos1:
+      kind: ceos
+      image: ceos:latest
+      startup-config: configs/ceos1.cfg
+
+    # SONiC Virtual Switch node
+    # Requires the Docker image artifact, NOT the VM disk image.
+    #   Correct:   docker-sonic-vs.gz   → docker load -i docker-sonic-vs.gz
+    #   Wrong:     sonic-vs.img.gz      → raw KVM disk image, won't work with docker load
+    #
+    # ARM (Apple Silicon) note: SONiC VS is x86-only. Docker Desktop runs it
+    # via Rosetta 2 emulation automatically. Enable "Use Rosetta for x86/amd64
+    # emulation" in Docker Desktop → Settings → General before deploying.
+    sonic1:
+      kind: sonic-vs
+      image: docker-sonic-vs:latest
+
+  links:
+    # Single point-to-point link between the two devices.
+    # ceos1 eth1  <-->  sonic1 eth1
+    - endpoints: ["ceos1:eth1", "sonic1:eth1"]
