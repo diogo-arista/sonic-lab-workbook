@@ -20,6 +20,10 @@ topology:
     # SONiC Virtual Switch node
     # Image tag must match what you loaded:
     #   docker load -i docker-sonic-vs.gz
+    #
+    # ARM (Apple Silicon) note: SONiC VS is x86-only. Docker Desktop runs it
+    # via Rosetta 2 emulation automatically. Enable "Use Rosetta for x86/amd64
+    # emulation" in Docker Desktop → Settings → General before deploying.
     sonic1:
       kind: sonic-vs
       image: docker-sonic-vs:latest

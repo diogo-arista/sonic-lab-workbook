@@ -18,13 +18,13 @@ help:
 	@echo "  make deploy LAB=02-bgp"
 
 deploy:
-	sudo clab deploy --topo $(TOPO) --reconfigure
+	clab deploy --topo $(TOPO) --reconfigure
 
 destroy:
-	sudo clab destroy --topo $(TOPO) --cleanup
+	clab destroy --topo $(TOPO) --cleanup
 
 inspect:
-	sudo clab inspect --all
+	clab inspect --all
 
 connect-ceos:
 	docker exec -it clab-$(LAB)-ceos1 Cli
@@ -33,4 +33,4 @@ connect-sonic:
 	docker exec -it clab-$(LAB)-sonic1 bash
 
 graph:
-	sudo clab graph --topo $(TOPO)
+	clab graph --topo $(TOPO)

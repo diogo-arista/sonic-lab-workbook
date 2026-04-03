@@ -28,12 +28,15 @@ A containerized network lab environment using [containerlab](https://containerla
 
 | Platform | Requirement |
 |---|---|
-| macOS | [Docker Desktop](https://www.docker.com/products/docker-desktop/) 4.x+ |
+| macOS (Intel) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) 4.x+ |
+| macOS (Apple Silicon) | Docker Desktop 4.x+ with **Rosetta emulation enabled** (Settings → General → "Use Rosetta for x86/amd64 emulation") |
 | Windows | [Docker Desktop](https://www.docker.com/products/docker-desktop/) with WSL2 backend |
 | Linux | Docker Engine 24+ |
 | Any | [VS Code](https://code.visualstudio.com/) + [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) |
 
 > **System resources** — each lab node consumes RAM. Recommended: 16 GB RAM, 4+ CPU cores, 30 GB free disk.
+
+> **Apple Silicon (ARM) note** — cEOS-lab has native ARM64 builds since 4.28, so prefer downloading the ARM64 variant from arista.com. SONiC VS is x86-only and runs via Rosetta 2 emulation; expect higher CPU usage and slower boot times compared to native.
 
 ---
 
@@ -190,10 +193,10 @@ The topology connects one cEOS node to one SONiC node with a single point-to-poi
 **Deploy**
 
 ```bash
-make deploy
+clab deploy --topo labs/01-hello-world/topology.yml --reconfigure
 ```
 
-This runs `sudo clab deploy --topo labs/01-hello-world/topology.yml --reconfigure` and prints a summary table with each node's management IP.
+Containerlab prints a summary table with each node's management IP once all containers are running.
 
 Example output:
 
@@ -209,7 +212,7 @@ Example output:
 **Check status**
 
 ```bash
-make inspect
+clab inspect --all
 ```
 
 ---
@@ -219,8 +222,6 @@ make inspect
 ### ceos1 (Arista EOS CLI)
 
 ```bash
-make connect-ceos
-# or directly:
 docker exec -it clab-01-hello-world-ceos1 Cli
 ```
 
@@ -236,8 +237,6 @@ ceos1# ping 192.168.1.2     ! ping sonic1
 ### sonic1 (SONiC bash shell)
 
 ```bash
-make connect-sonic
-# or directly:
 docker exec -it clab-01-hello-world-sonic1 bash
 ```
 
@@ -259,7 +258,7 @@ ping 192.168.1.1 -c 3
 Containerlab assigns management IPs from the `172.20.20.0/24` subnet. Find them with:
 
 ```bash
-make inspect
+clab inspect --all
 ```
 
 Then SSH directly (cEOS credentials: `admin` / `admin`):
@@ -295,25 +294,30 @@ A successful ping confirms the virtual link is operational.
 When you are done, destroy the lab to free resources:
 
 ```bash
-make destroy
+clab destroy --topo labs/01-hello-world/topology.yml --cleanup
 ```
 
 This removes all containers, virtual interfaces, and the management Docker network.
 
 ---
 
-## Makefile Reference
+## Common containerlab Commands
 
-| Target | Description |
-|---|---|
-| `make deploy` | Deploy the current lab |
-| `make destroy` | Destroy and clean up the lab |
-| `make inspect` | List running nodes and their IPs |
-| `make connect-ceos` | Open EOS CLI on ceos1 |
-| `make connect-sonic` | Open bash shell on sonic1 |
-| `make graph` | Generate an interactive HTML topology diagram |
+```bash
+# Deploy a topology
+clab deploy --topo <topology.yml> --reconfigure
 
-To target a different lab directory: `make deploy LAB=02-bgp`
+# List running nodes and management IPs
+clab inspect --all
+
+# Destroy a lab and clean up networks
+clab destroy --topo <topology.yml> --cleanup
+
+# Generate an interactive HTML topology diagram
+clab graph --topo <topology.yml>
+```
+
+The [Makefile](Makefile) wraps these commands for multi-step workflows (e.g., setting LAB variables across deploy/destroy/inspect in one shot).
 
 ---
 
@@ -321,11 +325,14 @@ To target a different lab directory: `make deploy LAB=02-bgp`
 
 ### `clab deploy` fails: permission denied
 
-containerlab needs elevated privileges to create Linux network namespaces. The Makefile already prepends `sudo`. If running clab directly, use:
+The clab binary has file capabilities set (`cap_net_admin`, `cap_net_raw`, `cap_sys_admin`) so it runs without sudo inside the dev container. If you still see a permission error, verify the capabilities are intact:
 
 ```bash
-sudo clab deploy --topo labs/01-hello-world/topology.yml
+getcap /usr/bin/containerlab
+# Expected: /usr/bin/containerlab cap_net_admin,cap_net_raw,cap_sys_admin=eip
 ```
+
+If missing, rebuild the dev container (Command Palette → "Dev Containers: Rebuild Container").
 
 ### Docker image not found
 
