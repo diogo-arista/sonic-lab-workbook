@@ -1,0 +1,38 @@
+{
+  "name": "SONiC Lab Workbook",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false,
+      "installDockerBuildx": false,
+      "version": "latest"
+    }
+  },
+  // --privileged is required for containerlab to create Linux network namespaces
+  // and virtual interfaces inside the container. Without it, clab deploy will fail.
+  "runArgs": [
+    "--privileged"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "ms-python.python",
+        "ms-vscode.makefile-tools",
+        "srl-labs.vscode-containerlab"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true,
+        "yaml.schemas": {
+          "https://raw.githubusercontent.com/srl-labs/containerlab/main/schemas/clab.schema.json": "labs/**/*.yml"
+        }
+      }
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh"
+}

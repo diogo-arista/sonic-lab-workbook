@@ -1,0 +1,30 @@
+name: 01-hello-world
+
+# Management network shared across all nodes.
+# Containerlab assigns IPs automatically from this subnet.
+mgmt:
+  network: clab-mgmt
+  ipv4-subnet: 172.20.20.0/24
+
+topology:
+  nodes:
+
+    # Arista cEOS-lab node
+    # Image tag must match what you imported:
+    #   docker import cEOS-lab-4.32.0F.tar.xz ceos:4.32.0F
+    ceos1:
+      kind: ceos
+      image: ceos:4.32.0F
+      startup-config: configs/ceos1.cfg
+
+    # SONiC Virtual Switch node
+    # Image tag must match what you loaded:
+    #   docker load -i docker-sonic-vs.gz
+    sonic1:
+      kind: sonic-vs
+      image: docker-sonic-vs:latest
+
+  links:
+    # Single point-to-point link between the two devices.
+    # ceos1 eth1  <-->  sonic1 eth1
+    - endpoints: ["ceos1:eth1", "sonic1:eth1"]
