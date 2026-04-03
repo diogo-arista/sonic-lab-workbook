@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tree \
     iputils-ping \
     iproute2 \
+    iptables \
     tcpdump \
     net-tools \
     nmap \
@@ -35,3 +36,9 @@ RUN echo "deb [trusted=yes] https://apt.fury.io/netdevops/ /" \
 # cap_net_raw:   raw socket access (needed for some lab operations)
 # cap_sys_admin: mount namespaces, needed for veth pair setup
 RUN setcap cap_net_admin,cap_net_raw,cap_sys_admin+eip /usr/bin/containerlab
+
+# The containerlab apt package creates the 'clab_admins' group.
+# Add vscode to it here so the containerlab VS Code extension activates without
+# errors. The 'docker' group is handled in post-create.sh because its GID is
+# determined at runtime by the docker-outside-of-docker feature.
+RUN usermod -aG clab_admins vscode

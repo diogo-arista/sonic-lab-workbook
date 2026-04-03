@@ -10,16 +10,18 @@ topology:
   nodes:
 
     # Arista cEOS-lab node
-    # Image tag must match what you imported:
+    # Image tag must match what you imported. Examples:
     #   docker import cEOS-lab-4.32.0F.tar.xz ceos:4.32.0F
+    #   docker import cEOS-lab-4.35.3F.tar.xz ceos:latest
     ceos1:
       kind: ceos
-      image: ceos:4.32.0F
+      image: ceos:latest
       startup-config: configs/ceos1.cfg
 
     # SONiC Virtual Switch node
-    # Image tag must match what you loaded:
-    #   docker load -i docker-sonic-vs.gz
+    # Requires the Docker image artifact, NOT the VM disk image.
+    #   Correct:   docker-sonic-vs.gz   → docker load -i docker-sonic-vs.gz
+    #   Wrong:     sonic-vs.img.gz      → raw KVM disk image, won't work with docker load
     #
     # ARM (Apple Silicon) note: SONiC VS is x86-only. Docker Desktop runs it
     # via Rosetta 2 emulation automatically. Enable "Use Rosetta for x86/amd64

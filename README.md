@@ -124,19 +124,18 @@ Visit [sonic.software](https://sonic.software) and download the latest `docker-s
 **Option 2 — Azure DevOps build artifacts**
 
 ```bash
-# List recent VS builds (requires Azure CLI, optional)
-# Or download directly from the build UI:
+# Download directly from the build UI:
 # https://sonic-build.azurewebsites.net/ui/sonic/pipelines
 ```
+
+> **Important — pick the right file.** The SONiC build produces two files with similar names:
+> - `docker-sonic-vs.gz` — Docker image tarball. **This is what you need.**
+> - `sonic-vs.img.gz` — Raw KVM/QEMU disk image. `docker load` will reject it with `invalid tar header`.
 
 **Load**
 
 ```bash
-# If the file is a .gz (gzip-compressed tar)
 docker load -i docker-sonic-vs.gz
-
-# If the file has a different extension, Docker auto-detects the format:
-docker load -i docker-sonic-vs.tar
 ```
 
 **Tag** (if the loaded image has a non-descriptive tag)

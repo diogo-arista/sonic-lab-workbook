@@ -11,10 +11,14 @@
       "version": "latest"
     }
   },
-  // --privileged is required for containerlab to create Linux network namespaces
-  // and virtual interfaces inside the container. Without it, clab deploy will fail.
+  // --privileged: required for containerlab to create virtual interfaces.
+  // --pid=host: shares the host PID namespace so containerlab can access
+  //   /proc/<pid>/ns/net of sibling containers it creates via the Docker socket.
+  //   Without this, link creation fails in Codespaces and docker-outside-of-docker
+  //   setups with: "failed to Statfs /proc/<pid>/ns/net: no such file or directory"
   "runArgs": [
-    "--privileged"
+    "--privileged",
+    "--pid=host"
   ],
   "customizations": {
     "vscode": {
