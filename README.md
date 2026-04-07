@@ -113,47 +113,46 @@ docker images | grep ceos
 
 ### 2b — SONiC Virtual Switch
 
-**Download**
+**Option 1 — Download script (recommended)**
 
-SONiC VS images are built by the SONiC community CI pipeline. Two sources:
-
-**Option 1 — sonic.software (recommended)**
-
-Visit [sonic.software](https://sonic.software) and download the latest `docker-sonic-vs.gz` artifact for the `vs` platform.
-
-**Option 2 — Azure DevOps build artifacts**
+A script is provided that queries [sonic.software](https://sonic.software) for the latest build, downloads it, and loads it into Docker in one step:
 
 ```bash
-# Download directly from the build UI:
-# https://sonic-build.azurewebsites.net/ui/sonic/pipelines
+# Download and load the latest stable release branch
+bash scripts/get-sonic-vs.sh --load
+
+# List all available branches first
+bash scripts/get-sonic-vs.sh --branch list
+
+# Pin a specific release branch
+bash scripts/get-sonic-vs.sh --branch 202411 --load
 ```
 
-> **Important — pick the right file.** The SONiC build produces two files with similar names:
-> - `docker-sonic-vs.gz` — Docker image tarball. **This is what you need.**
-> - `sonic-vs.img.gz` — Raw KVM/QEMU disk image. `docker load` will reject it with `invalid tar header`.
+Or via Make:
 
-**Load**
+```bash
+make get-sonic                         # latest release branch
+SONIC_BRANCH=202411 make get-sonic     # specific branch
+```
+
+**Option 2 — Manual download**
+
+Visit [sonic.software](https://sonic.software) or the [Azure DevOps build UI](https://sonic-build.azurewebsites.net/ui/sonic/pipelines) and download `docker-sonic-vs.gz`, then:
 
 ```bash
 docker load -i docker-sonic-vs.gz
+docker tag <loaded-image-id> docker-sonic-vs:latest
 ```
 
-**Tag** (if the loaded image has a non-descriptive tag)
-
-```bash
-# Check what tag was loaded
-docker images | grep sonic
-
-# If needed, retag to match topology.yml
-docker tag <image-id> docker-sonic-vs:latest
-```
+> **Pick the right file.** The SONiC build produces two similarly named files:
+> - `docker-sonic-vs.gz` — Docker image tarball. **This is what you need.**
+> - `sonic-vs.img.gz` — Raw KVM/QEMU disk image. `docker load` will reject it with `invalid tar header`.
 
 **Verify**
 
 ```bash
 docker images | grep sonic
-# Expected output:
-# docker-sonic-vs   latest   <id>   <date>   <size>
+# docker-sonic-vs   latest   <id>   <date>   ~800MB
 ```
 
 ---
