@@ -37,12 +37,10 @@ RUN echo "deb [trusted=yes] https://apt.fury.io/netdevops/ /" \
 RUN update-alternatives --set iptables  /usr/sbin/iptables-legacy  2>/dev/null || true \
     && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
 
-# Grant containerlab the Linux capabilities it needs so it runs without sudo.
-# cap_net_admin: create/modify network interfaces and namespaces
-# cap_net_raw:   raw socket access (needed for some lab operations)
-# cap_sys_admin: mount namespaces, needed for veth pair setup
-# cap_chown:     chown the authorized_keys file containerlab creates for SSH access
-RUN setcap cap_net_admin,cap_net_raw,cap_sys_admin,cap_chown+eip /usr/bin/containerlab
+# Set the SUID bit so containerlab runs as root regardless of who calls it.
+# This is the official sudo-less operation method (containerlab.dev/install/#sudo-less-operation)
+# and handles all capability requirements including chmod/chown on Codespaces.
+RUN chmod u+s /usr/bin/containerlab
 
 # The containerlab apt package creates the 'clab_admins' group.
 # Add vscode to it here so the containerlab VS Code extension activates without

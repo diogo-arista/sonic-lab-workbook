@@ -377,11 +377,11 @@ The [Makefile](Makefile) wraps these commands for multi-step workflows (e.g., se
 
 ### `clab deploy` fails: permission denied
 
-The clab binary has file capabilities set (`cap_net_admin`, `cap_net_raw`, `cap_sys_admin`) so it runs without sudo inside the dev container. If you still see a permission error, verify the capabilities are intact:
+The clab binary has the SUID bit set so it runs as root without sudo. If you still see a permission error, verify the SUID bit is intact:
 
 ```bash
-getcap /usr/bin/containerlab
-# Expected: /usr/bin/containerlab cap_net_admin,cap_net_raw,cap_sys_admin=eip
+ls -l /usr/bin/containerlab
+# Expected: -rwsr-xr-x ... /usr/bin/containerlab
 ```
 
 If missing, rebuild the dev container (Command Palette → "Dev Containers: Rebuild Container").
