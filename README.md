@@ -48,7 +48,7 @@ The dev container provides a pre-configured Linux environment with containerlab,
 
 1. Clone this repository:
    ```bash
-   git clone https://gitlab.aristanetworks.com/tac-team/sonic-lab-workbook.git sonic-lab-workbook
+   git clone https://github.com/diogo-arista/sonic-lab-workbook.git sonic-lab-workbook
    cd sonic-lab-workbook
    ```
 
