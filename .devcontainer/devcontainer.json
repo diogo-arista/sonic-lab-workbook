@@ -18,7 +18,8 @@
   //   setups with: "failed to Statfs /proc/<pid>/ns/net: no such file or directory"
   "runArgs": [
     "--privileged",
-    "--pid=host"
+    "--pid=host",
+    "--device=/dev/kvm"
   ],
   "customizations": {
     "vscode": {
