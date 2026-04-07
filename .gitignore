@@ -6,6 +6,7 @@
 *.tar
 *.ova
 *.vmdk
+*.qcow2
 cEOS-lab-*.tar.xz
 
 # Containerlab runtime directories (created on deploy, not source files)

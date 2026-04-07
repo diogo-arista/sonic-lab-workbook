@@ -27,35 +27,29 @@ topology:
       startup-config: configs/ceos1.cfg
 
     # -----------------------------------------------------------------------
-    # SONiC Virtual Switch
+    # SONiC Virtual Machine (via vrnetlab)
     # -----------------------------------------------------------------------
-    # Image tag must match what you loaded:
-    #   docker load -i docker-sonic-vs.gz   (NOT sonic-vs.img.gz — that is a KVM disk image)
+    # Image is built with:  bash scripts/build-sonic-vm.sh
+    # The script downloads sonic-vs.img.gz, wraps it with vrnetlab, and
+    # produces vrnetlab/vr-sonic:latest.
     #
-    # Interface mapping inside SONiC VS (hwsku Force10-S6000, 4 lanes/port):
-    #   eth0 (containerlab) → Management interface (mgmt network)
-    #   eth1                → Ethernet0   (first data port)
-    #   eth2                → Ethernet4   (second data port)
-    #   eth3                → Ethernet8   ...and so on (+4 per port)
+    # Requires /dev/kvm (nested virtualization):
+    #   - GitHub Codespaces (privileged):  supported
+    #   - Linux host:                      supported
+    #   - macOS Docker Desktop:            NOT supported
     #
-    # ARM (Apple Silicon): SONiC VS is x86-only. Docker Desktop runs it via
-    # Rosetta 2 — enable "Use Rosetta for x86/amd64 emulation" in Docker Desktop
-    # Settings → General before deploying.
+    # Interface mapping (same as sonic-vs):
+    #   eth0  → management (containerlab mgmt network)
+    #   eth1  → Ethernet0  (first data port)
+    #   eth2  → Ethernet4  (second data port, +4 lanes per port)
+    #
+    # Default credentials: admin / admin
     sonic1:
-      kind: sonic-vs
-      image: docker-sonic-vs:latest
+      kind: sonic-vm
+      image: vrnetlab/vr-sonic:latest
       mgmt-ipv4: 172.20.20.12
       group: router
       startup-config: configs/sonic1-config.json
-      binds:
-        # Mount the FRR config directly. Required when docker_routing_config_mode
-        # is "split-unified" — SONiC will NOT generate frr.conf from ConfigDB.
-        - configs/sonic1-frr.conf:/etc/sonic/frr/frr.conf:ro
-      exec:
-        # SONiC ships with ebtables rules designed for hardware ASICs.
-        # On virtual switches, these rules block all forwarded traffic.
-        # Remove them immediately after the container starts.
-        - bash -c "ebtables -D FORWARD -j DROP 2>/dev/null || true"
 
   links:
     # Single point-to-point link.

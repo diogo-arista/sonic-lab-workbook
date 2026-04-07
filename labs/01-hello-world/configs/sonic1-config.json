@@ -7,8 +7,7 @@
             "platform": "x86_64-kvm_x86_64-r0",
             "buffer_model": "traditional",
             "timezone": "UTC",
-            "bgp_asn": "65001",
-            "docker_routing_config_mode": "split-unified"
+            "bgp_asn": "65001"
         }
     },
 
@@ -26,6 +25,12 @@
     "INTERFACE": {
         "Ethernet0": {},
         "Ethernet0|192.168.1.2/30": {}
+    },
+
+    "PASSW_HARDENING": {
+        "POLICIES": {
+            "state": "disabled"
+        }
     },
 
     "PFC_WATCHDOG": {

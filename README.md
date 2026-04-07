@@ -1,6 +1,8 @@
 # SONiC Lab Workbook
 
-A containerized network lab environment using [containerlab](https://containerlab.dev) with Arista **cEOS-lab** and **SONiC** (Software for Open Networking in the Cloud) as node operating systems. The devcontainer setup ensures a consistent Linux environment on any platform — macOS, Windows (WSL2), or GitHub Codespaces.
+A containerized network lab environment using [containerlab](https://containerlab.dev) with Arista **cEOS-lab** and **SONiC** as node operating systems. The devcontainer setup ensures a consistent Linux environment on any platform — macOS, Windows (WSL2), or GitHub Codespaces.
+
+SONiC runs as a full KVM virtual machine wrapped in Docker via [vrnetlab](https://github.com/srl-labs/vrnetlab). This gives it a proper boot sequence, reliable SSH, and predictable configuration loading — unlike the container-based `sonic-vs` image.
 
 ---
 
@@ -9,16 +11,20 @@ A containerized network lab environment using [containerlab](https://containerla
 ```
 .
 ├── .devcontainer/
-│   ├── devcontainer.json   # Dev container configuration
-│   ├── Dockerfile          # Container image with containerlab + tools
-│   ├── requirements.txt    # Python networking libraries
-│   └── post-create.sh      # One-time setup script
+│   ├── devcontainer.json        # Dev container configuration
+│   ├── Dockerfile               # Container image with containerlab + tools
+│   ├── requirements.txt         # Python networking libraries
+│   └── post-create.sh           # One-time setup script
 ├── labs/
 │   └── 01-hello-world/
 │       ├── topology.clab.yml    # Containerlab topology: ceos1 <--> sonic1
 │       └── configs/
-│           └── ceos1.cfg   # cEOS startup configuration
-├── Makefile                # Convenience targets (deploy, destroy, inspect, …)
+│           ├── ceos1.cfg        # cEOS startup configuration
+│           └── sonic1-config.json  # SONiC config_db.json
+├── scripts/
+│   ├── build-sonic-vm.sh        # Download + build the SONiC vrnetlab image
+│   └── get-sonic-vs.sh          # (Legacy) Download sonic-vs Docker image
+├── Makefile                     # Convenience targets
 └── README.md
 ```
 
@@ -28,15 +34,20 @@ A containerized network lab environment using [containerlab](https://containerla
 
 | Platform | Requirement |
 |---|---|
-| macOS (Intel) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) 4.x+ |
-| macOS (Apple Silicon) | Docker Desktop 4.x+ with **Rosetta emulation enabled** (Settings → General → "Use Rosetta for x86/amd64 emulation") |
+| macOS (Intel or Apple Silicon) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) 4.x+ |
 | Windows | [Docker Desktop](https://www.docker.com/products/docker-desktop/) with WSL2 backend |
 | Linux | Docker Engine 24+ |
 | Any | [VS Code](https://code.visualstudio.com/) + [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) |
 
 > **System resources** — each lab node consumes RAM. Recommended: 16 GB RAM, 4+ CPU cores, 30 GB free disk.
 
-> **Apple Silicon (ARM) note** — cEOS-lab has native ARM64 builds since 4.28, so prefer downloading the ARM64 variant from arista.com. SONiC VS is x86-only and runs via Rosetta 2 emulation; expect higher CPU usage and slower boot times compared to native.
+> **KVM (nested virtualization) — required for SONiC**
+> SONiC runs as a KVM virtual machine. `/dev/kvm` must be accessible inside the dev container.
+> - **GitHub Codespaces** — supported. The devcontainer runs in privileged mode which exposes `/dev/kvm`. Use an **8-core or larger** machine.
+> - **Linux host** — supported. KVM is available natively.
+> - **macOS (Docker Desktop)** — `/dev/kvm` is **not** exposed by Docker Desktop on macOS. You can build the lab image on a Linux machine or Codespaces and export it, but you cannot run `sonic-vm` nodes locally on macOS.
+
+> **Apple Silicon note** — cEOS-lab has native ARM64 builds since 4.28. Prefer the ARM64 variant from arista.com.
 
 ---
 
@@ -67,16 +78,17 @@ The dev container provides a pre-configured Linux environment with containerlab,
 ### Option B: GitHub Codespaces
 
 1. On the repository page, click **Code → Codespaces → Create codespace on main**.
-2. Wait for the environment to build (first run ~3–5 minutes).
-3. The integrated terminal is the lab environment.
+2. When prompted to choose a machine, select **8-core or larger** (required for the SONiC VM).
+3. Wait for the environment to build (first run ~3–5 minutes).
+4. The integrated terminal is the lab environment.
 
-> **Note for Codespaces** — Docker images (cEOS, SONiC) are not pre-loaded. You need to import them after the codespace starts. See [Step 2](#step-2--import-lab-images).
+> **Note for Codespaces** — Docker images are not pre-loaded. Import them after the codespace starts (see Step 2).
 
 ---
 
 ## Step 2 — Import Lab Images
 
-Neither cEOS-lab nor SONiC VS is available on public registries — both must be imported manually. Run all commands **inside the dev container terminal**.
+Neither cEOS-lab nor the SONiC vrnetlab image are available on public registries — both must be built or imported manually. Run all commands **inside the dev container terminal**.
 
 ---
 
@@ -87,87 +99,95 @@ Neither cEOS-lab nor SONiC VS is available on public registries — both must be
 1. Create a free account at [arista.com](https://www.arista.com).
 2. Go to **Software Downloads → EOS → cEOS-lab**.
 3. Download `cEOS-lab-<version>.tar.xz` (e.g., `cEOS-lab-4.32.0F.tar.xz`).
+   - On Apple Silicon, prefer the **ARM64** build.
 
 **Transfer into the dev container** (macOS / Linux host)
 
-If working locally, the container shares the host Docker daemon, so you can import from the host terminal or from the VS Code terminal — both write to the same Docker image store.
+The container shares the host Docker daemon, so you can import from either the host terminal or the VS Code terminal — both write to the same Docker image store.
 
 **Import**
 
 ```bash
 # Replace the filename with the version you downloaded
-docker import cEOS-lab-4.32.0F.tar.xz ceos:4.32.0F
+docker import cEOS-lab-4.32.0F.tar.xz ceos:latest
 ```
 
 **Verify**
 
 ```bash
 docker images | grep ceos
-# Expected output:
-# ceos   4.32.0F   <id>   <date>   <size>
+# ceos   latest   <id>   <date>   <size>
 ```
 
-> If you downloaded a different version, update the `image:` field in [labs/01-hello-world/topology.clab.yml](labs/01-hello-world/topology.clab.yml) accordingly.
+> If you downloaded a different version, update the `image:` field in [labs/01-hello-world/topology.clab.yml](labs/01-hello-world/topology.clab.yml).
 
 ---
 
-### 2b — SONiC Virtual Switch
+### 2b — SONiC VM (vrnetlab)
 
-**Option 1 — Download script (recommended)**
+SONiC runs as a full KVM virtual machine wrapped in Docker via vrnetlab. This requires building a Docker image from the SONiC KVM disk image.
 
-A script is provided that queries [sonic.software](https://sonic.software) for the latest build, downloads it, and loads it into Docker in one step:
+#### What `build-sonic-vm.sh` does
+
+1. Downloads `sonic-vs.img.gz` (the KVM disk image) from [sonic.software](https://sonic.software)
+2. Decompresses and renames it to the format vrnetlab expects (`sonic-vs-YYYYMM.qcow2`)
+3. Clones [srl-labs/vrnetlab](https://github.com/srl-labs/vrnetlab) and runs `make` in the `sonic/` directory
+4. Tags the resulting image as `vrnetlab/vr-sonic:latest`
+5. Cleans up build artifacts (the downloaded `.img.gz` is kept for re-use)
+
+The build takes **10–20 minutes** and requires roughly 6 GB of free disk space during the build (the final image is ~3.2 GB).
+
+#### Run the build script
 
 ```bash
-# Download and load the latest stable release branch
-bash scripts/get-sonic-vs.sh --load
+# Build from the latest stable release branch (recommended)
+bash scripts/build-sonic-vm.sh
 
-# List all available branches first
-bash scripts/get-sonic-vs.sh --branch list
+# List all available release branches first
+bash scripts/build-sonic-vm.sh --branch list
 
 # Pin a specific release branch
-bash scripts/get-sonic-vs.sh --branch 202411 --load
+bash scripts/build-sonic-vm.sh --branch 202411
 ```
 
 Or via Make:
 
 ```bash
-make get-sonic                         # latest release branch
-SONIC_BRANCH=202411 make get-sonic     # specific branch
+make build-sonic-vm                        # latest release branch
+SONIC_BRANCH=202411 make build-sonic-vm   # specific branch
 ```
 
-**Option 2 — Manual download**
-
-Visit [sonic.software](https://sonic.software) or the [Azure DevOps build UI](https://sonic-build.azurewebsites.net/ui/sonic/pipelines) and download `docker-sonic-vs.gz`, then:
+If you already have a `sonic-vs.img` or `sonic-vs.img.gz` from a previous download, skip the download step:
 
 ```bash
-docker load -i docker-sonic-vs.gz
-docker tag <loaded-image-id> docker-sonic-vs:latest
+bash scripts/build-sonic-vm.sh --image /path/to/sonic-vs.img.gz
 ```
-
-> **Pick the right file.** The SONiC build produces two similarly named files:
-> - `docker-sonic-vs.gz` — Docker image tarball. **This is what you need.**
-> - `sonic-vs.img.gz` — Raw KVM/QEMU disk image. `docker load` will reject it with `invalid tar header`.
 
 **Verify**
 
 ```bash
-docker images | grep sonic
-# docker-sonic-vs   latest   <id>   <date>   ~800MB
+docker images | grep vr-sonic
+# vrnetlab/vr-sonic   latest    <id>   <date>   ~3.2GB
+# vrnetlab/vr-sonic   202411    <id>   <date>   ~3.2GB
 ```
+
+#### Behind the scenes — how vrnetlab works
+
+vrnetlab wraps a KVM/QEMU virtual machine inside a Docker container. When containerlab starts the `sonic-vm` node, it launches the Docker container, which in turn boots the SONiC VM using QEMU inside it. The VM gets its management interface from the containerlab management network and its data interfaces via `tc` (traffic control) tap devices. This gives SONiC a complete, unmodified boot sequence identical to a bare-metal or cloud deployment.
 
 ---
 
 ### 2c — Confirm both images are present
 
 ```bash
-docker images | grep -E "ceos|sonic"
+docker images | grep -E "ceos|vr-sonic"
 ```
 
 Expected output (exact tags may differ):
 
 ```
-ceos              4.32.0F   abc123   2 days ago   1.2GB
-docker-sonic-vs   latest    def456   1 week ago   1.8GB
+ceos              latest    abc123   2 days ago   1.2GB
+vrnetlab/vr-sonic latest    def456   1 hour ago   3.2GB
 ```
 
 ---
@@ -179,7 +199,7 @@ The topology connects one cEOS node to one SONiC node with a single point-to-poi
 ```
   ┌─────────────────┐          ┌─────────────────┐
   │     ceos1       │          │     sonic1      │
-  │  (Arista EOS)   │          │    (SONiC VS)   │
+  │  (Arista EOS)   │          │    (SONiC VM)   │
   │  mgmt: .11      │          │  mgmt: .12      │
   │                 │          │                 │
   │  Ethernet1      ├──────────┤  Ethernet0      │
@@ -189,7 +209,7 @@ The topology connects one cEOS node to one SONiC node with a single point-to-poi
         └──── Management 172.20.20.0/24 ──────┘
 ```
 
-> **SONiC interface naming** — containerlab assigns Linux interface names (`eth0`, `eth1`, …) to the container. Inside SONiC, data interfaces are named `Ethernet0`, `Ethernet4`, `Ethernet8`, … (incrementing by 4 lanes per port for the Force10-S6000 hwsku). The mapping is:
+> **SONiC interface naming** — containerlab assigns Linux interface names to the VM. Inside SONiC, data interfaces are named `Ethernet0`, `Ethernet4`, `Ethernet8`, … (incrementing by 4 lanes per port for the Force10-S6000 hwsku). The mapping is:
 > - `eth0` → management (connected to containerlab mgmt network)
 > - `eth1` → `Ethernet0` (first data port)
 > - `eth2` → `Ethernet4` (second data port)
@@ -200,28 +220,23 @@ The topology connects one cEOS node to one SONiC node with a single point-to-poi
 clab deploy --topo labs/01-hello-world/topology.clab.yml --reconfigure
 ```
 
-The topology uses `prefix: ""` so container names are simply `ceos1` and `sonic1`. Containerlab prints a summary table with management IPs once all containers are running:
+Containerlab prints a summary table with management IPs once all containers are running:
 
 ```
-+---+--------+----+--------------+------------------------+---------+----------------+
-| # | Name   | .. | Container ID | Image                  | State   | IPv4 Address   |
-+---+--------+----+--------------+------------------------+---------+----------------+
-| 1 | ceos1  |    | a1b2c3d4e5f6 | ceos:latest            | running | 172.20.20.11/24|
-| 2 | sonic1 |    | b2c3d4e5f6a1 | docker-sonic-vs:latest | running | 172.20.20.12/24|
-+---+--------+----+--------------+------------------------+---------+----------------+
++---+--------+----+--------------+--------------------------+---------+----------------+
+| # | Name   | .. | Container ID | Image                    | State   | IPv4 Address   |
++---+--------+----+--------------+--------------------------+---------+----------------+
+| 1 | ceos1  |    | a1b2c3d4e5f6 | ceos:latest              | running | 172.20.20.11/24|
+| 2 | sonic1 |    | b2c3d4e5f6a1 | vrnetlab/vr-sonic:latest | running | 172.20.20.12/24|
++---+--------+----+--------------+--------------------------+---------+----------------+
 ```
+
+> **Boot times** — cEOS typically takes 60–90 seconds. The SONiC VM takes **2–3 minutes** to fully boot (the QEMU VM must start, run the SONiC init sequence, and bring up all services before SSH is available). Wait before trying to connect.
 
 **Check status**
 
 ```bash
 clab inspect --topo labs/01-hello-world/topology.clab.yml
-```
-
-**If SONiC interface IP is not applied after boot**, re-apply the startup config manually:
-
-```bash
-docker cp labs/01-hello-world/configs/sonic1-config.json sonic1:/etc/sonic/config_db.json
-docker exec sonic1 sudo config reload -y
 ```
 
 ---
@@ -230,7 +245,11 @@ docker exec sonic1 sudo config reload -y
 
 ### ceos1 (Arista EOS CLI)
 
+SSH is configured with no password — just press Enter or use SSH directly:
+
 ```bash
+ssh admin@172.20.20.11
+# or
 docker exec -it ceos1 Cli
 ```
 
@@ -243,10 +262,12 @@ ceos1# show ip interface brief
 ceos1# ping 192.168.1.2     ! ping sonic1 Ethernet0
 ```
 
-### sonic1 (SONiC bash shell)
+### sonic1 (SONiC)
+
+SSH with `admin` / `admin`:
 
 ```bash
-docker exec -it sonic1 bash
+ssh admin@172.20.20.12
 ```
 
 Inside SONiC:
@@ -260,19 +281,14 @@ show ip interfaces
 ping 192.168.1.1 -c 3
 ```
 
-### SSH access
+> Because sonic1 runs as a VM, `docker exec` gives you access to the vrnetlab wrapper container, not the SONiC VM itself. Always use SSH to reach the SONiC shell.
 
-Management IPs are static (defined in `topology.clab.yml`):
+### Management IPs
 
-| Node   | Management IP  | Credentials   |
-|--------|---------------|---------------|
-| ceos1  | 172.20.20.11  | admin / admin |
-| sonic1 | 172.20.20.12  | admin / admin |
-
-```bash
-ssh admin@172.20.20.11   # ceos1
-ssh admin@172.20.20.12   # sonic1
-```
+| Node   | Management IP  | Credentials           |
+|--------|----------------|-----------------------|
+| ceos1  | 172.20.20.11   | admin / (no password) |
+| sonic1 | 172.20.20.12   | admin / admin         |
 
 ---
 
@@ -304,52 +320,7 @@ When you are done, destroy the lab to free resources:
 clab destroy --topo labs/01-hello-world/topology.clab.yml --cleanup
 ```
 
-This removes all containers, virtual interfaces, and the management Docker network.
-
----
-
-## SONiC VS Configuration Architecture
-
-Understanding how SONiC configuration works is essential for future labs.
-
-### Two separate config files
-
-SONiC uses `docker_routing_config_mode = split-unified` in this project. That means configuration is split into two independent files:
-
-| File | Purpose |
-|---|---|
-| `/etc/sonic/config_db.json` | System state: ports, interfaces, VLANs, VXLAN tunnels, device metadata |
-| `/etc/sonic/frr/frr.conf` | Routing protocols: BGP neighbors, EVPN, route maps, prefix lists |
-
-In split-unified mode, SONiC will **never overwrite** `frr.conf` from ConfigDB — you own it completely. This is the right approach for labs and matches production deployments.
-
-### Applying changes
-
-**ConfigDB changes** (interfaces, VLANs, etc.):
-```bash
-docker exec sonic1 sudo config reload -y
-```
-
-**FRR changes** (BGP, routing):
-```bash
-docker exec sonic1 vtysh -f /etc/sonic/frr/frr.conf
-# Or interactively:
-docker exec -it sonic1 vtysh
-```
-
-### SONiC VS virtual switch quirk — ebtables
-
-SONiC ships with ebtables rules designed for hardware ASIC switches. On virtual switches, these rules **block all forwarded traffic** silently. The topology applies this fix automatically via `exec` on container start:
-
-```bash
-ebtables -D FORWARD -j DROP
-```
-
-If traffic between nodes is not flowing after deploy, verify the rule is gone:
-```bash
-docker exec sonic1 ebtables -L FORWARD
-# Should show: no rules
-```
+This removes all containers, virtual interfaces, and the management Docker network. The vrnetlab/vr-sonic Docker image remains in your local image store.
 
 ---
 
@@ -369,15 +340,27 @@ clab destroy --topo <topology.clab.yml> --cleanup
 clab graph --topo <topology.clab.yml>
 ```
 
-The [Makefile](Makefile) wraps these commands for multi-step workflows (e.g., setting LAB variables across deploy/destroy/inspect in one shot).
+The [Makefile](Makefile) wraps these commands for convenience.
 
 ---
 
 ## Troubleshooting
 
+### `/dev/kvm` not found when running `build-sonic-vm.sh`
+
+You are on macOS with Docker Desktop, which does not expose `/dev/kvm` to containers. Run the build in GitHub Codespaces or on a Linux host, then export the image and import it elsewhere:
+
+```bash
+# On a Linux machine / Codespaces — save the image
+docker save vrnetlab/vr-sonic:latest | gzip > vr-sonic.tar.gz
+
+# On macOS — load it
+docker load -i vr-sonic.tar.gz
+```
+
 ### `clab deploy` fails: permission denied
 
-The clab binary has the SUID bit set so it runs as root without sudo. If you still see a permission error, verify the SUID bit is intact:
+The clab binary has the SUID bit set so it runs as root without sudo. Verify it is intact:
 
 ```bash
 ls -l /usr/bin/containerlab
@@ -388,11 +371,11 @@ If missing, rebuild the dev container (Command Palette → "Dev Containers: Rebu
 
 ### Docker image not found
 
-Ensure the image name and tag in `topology.clab.yml` exactly match what is in your local Docker image store:
+Ensure the image name and tag in `topology.clab.yml` exactly match your local Docker image store:
 
 ```bash
 docker images
-# Compare output with the image: fields in topology.clab.yml
+# Compare with the image: fields in topology.clab.yml
 ```
 
 ### cEOS takes long to boot
@@ -401,10 +384,28 @@ cEOS-lab typically takes 60–90 seconds to finish initializing. If `Cli` report
 
 ### SONiC takes long to boot
 
-SONiC VS can take 2–3 minutes before all services are up. Check readiness with:
+The SONiC VM boots inside QEMU and runs the full SONiC init sequence. Allow **2–3 minutes** before SSH becomes available. Watch for readiness:
 
 ```bash
-docker exec clab-01-hello-world-sonic1 sonic-cfggen --print-data 2>/dev/null | head -5
+# Poll until SSH responds
+until ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no admin@172.20.20.12 "show version" 2>/dev/null; do
+    echo "Waiting for SONiC..."; sleep 10
+done
+```
+
+### SONiC SSH connection refused
+
+If SSH is still refused after 3 minutes, check the vrnetlab wrapper container logs:
+
+```bash
+docker logs sonic1 | tail -30
+```
+
+Look for QEMU boot errors or kernel panics. If the VM failed to start, redeploy:
+
+```bash
+clab destroy --topo labs/01-hello-world/topology.clab.yml --cleanup
+clab deploy  --topo labs/01-hello-world/topology.clab.yml --reconfigure
 ```
 
 ### Connectivity issues between nodes
@@ -415,13 +416,13 @@ Verify the link is present in both OS views:
 # From ceos1 EOS CLI
 show interfaces Ethernet1
 
-# From sonic1 bash
-ip link show eth1
+# From sonic1 via SSH
+ssh admin@172.20.20.12 "show interfaces status"
 ```
 
 ### Codespaces: image files too large to upload
 
-GitHub Codespaces has an upload size limit via the browser. For large images (>1 GB), use the [GitHub CLI](https://cli.github.com/) or consider hosting images in a private container registry and pulling them via `docker pull`.
+GitHub Codespaces has an upload size limit via the browser. For large files (>1 GB), use the [GitHub CLI](https://cli.github.com/) to copy files into the codespace, or run `build-sonic-vm.sh` directly inside Codespaces (it downloads from sonic.software automatically).
 
 ---
 
@@ -429,7 +430,8 @@ GitHub Codespaces has an upload size limit via the browser. For large images (>1
 
 - [Containerlab documentation](https://containerlab.dev/quickstart/)
 - [Containerlab cEOS kind](https://containerlab.dev/manual/kinds/ceos/)
-- [Containerlab SONiC kind](https://containerlab.dev/manual/kinds/sonic-vs/)
+- [Containerlab sonic-vm kind](https://containerlab.dev/manual/kinds/sonic-vm/)
+- [vrnetlab — srl-labs/vrnetlab](https://github.com/srl-labs/vrnetlab)
 - [Arista cEOS-lab download](https://www.arista.com/en/support/software-download)
 - [SONiC project](https://sonic-net.github.io/SONiC/)
 - [sonic.software image downloads](https://sonic.software)
