@@ -1,0 +1,12 @@
+# Lab image files — these are large binaries that must not be committed to git.
+# Download them separately following the instructions in README.md.
+*.gz
+*.xz
+*.img
+*.tar
+*.ova
+*.vmdk
+cEOS-lab-*.tar.xz
+
+# Containerlab runtime directories (created on deploy, not source files)
+clab-*/
