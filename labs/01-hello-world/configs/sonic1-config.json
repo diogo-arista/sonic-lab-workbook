@@ -1,0 +1,45 @@
+{
+    "DEVICE_METADATA": {
+        "localhost": {
+            "hostname": "sonic1",
+            "hwsku": "Force10-S6000",
+            "type": "LeafRouter",
+            "platform": "x86_64-kvm_x86_64-r0",
+            "buffer_model": "traditional",
+            "timezone": "UTC",
+            "bgp_asn": "65001",
+            "docker_routing_config_mode": "split-unified"
+        }
+    },
+
+    "PORT": {
+        "Ethernet0": {
+            "admin_status": "up",
+            "speed": "40000",
+            "mtu": "9216",
+            "alias": "fortyGigE0/0",
+            "lanes": "25,26,27,28",
+            "description": "to ceos1 Ethernet1"
+        }
+    },
+
+    "INTERFACE": {
+        "Ethernet0": {},
+        "Ethernet0|192.168.1.2/30": {}
+    },
+
+    "PFC_WATCHDOG": {
+        "GLOBAL": {
+            "POLL_INTERVAL": "0"
+        }
+    },
+
+    "FEATURE": {
+        "bgp":      { "state": "enabled", "auto_restart": "enabled" },
+        "database": { "state": "enabled", "auto_restart": "enabled" },
+        "swss":     { "state": "enabled", "auto_restart": "enabled" },
+        "syncd":    { "state": "enabled", "auto_restart": "enabled" },
+        "eventd":   { "state": "enabled", "auto_restart": "enabled" },
+        "lldp":     { "state": "enabled", "auto_restart": "enabled" }
+    }
+}

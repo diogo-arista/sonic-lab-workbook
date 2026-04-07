@@ -1,7 +1,11 @@
 name: 01-hello-world
 
+# Empty prefix means container names are just the node names: ceos1, sonic1.
+# Without this, names would be clab-01-hello-world-ceos1, etc.
+prefix: ""
+
 # Management network shared across all nodes.
-# Containerlab assigns IPs automatically from this subnet.
+# Static mgmt-ipv4 per node makes SSH and scripting predictable.
 mgmt:
   network: clab-mgmt
   ipv4-subnet: 172.20.20.0/24
@@ -9,28 +13,52 @@ mgmt:
 topology:
   nodes:
 
-    # Arista cEOS-lab node
-    # Image tag must match what you imported. Examples:
-    #   docker import cEOS-lab-4.32.0F.tar.xz ceos:4.32.0F
+    # -----------------------------------------------------------------------
+    # Arista cEOS-lab
+    # -----------------------------------------------------------------------
+    # Image tag must match what you imported:
     #   docker import cEOS-lab-4.35.3F.tar.xz ceos:latest
+    # On Apple Silicon, prefer the ARM64 cEOS build (native, no emulation).
     ceos1:
       kind: ceos
       image: ceos:latest
+      mgmt-ipv4: 172.20.20.11
+      group: router
       startup-config: configs/ceos1.cfg
 
-    # SONiC Virtual Switch node
-    # Requires the Docker image artifact, NOT the VM disk image.
-    #   Correct:   docker-sonic-vs.gz   → docker load -i docker-sonic-vs.gz
-    #   Wrong:     sonic-vs.img.gz      → raw KVM disk image, won't work with docker load
+    # -----------------------------------------------------------------------
+    # SONiC Virtual Switch
+    # -----------------------------------------------------------------------
+    # Image tag must match what you loaded:
+    #   docker load -i docker-sonic-vs.gz   (NOT sonic-vs.img.gz — that is a KVM disk image)
     #
-    # ARM (Apple Silicon) note: SONiC VS is x86-only. Docker Desktop runs it
-    # via Rosetta 2 emulation automatically. Enable "Use Rosetta for x86/amd64
-    # emulation" in Docker Desktop → Settings → General before deploying.
+    # Interface mapping inside SONiC VS (hwsku Force10-S6000, 4 lanes/port):
+    #   eth0 (containerlab) → Management interface (mgmt network)
+    #   eth1                → Ethernet0   (first data port)
+    #   eth2                → Ethernet4   (second data port)
+    #   eth3                → Ethernet8   ...and so on (+4 per port)
+    #
+    # ARM (Apple Silicon): SONiC VS is x86-only. Docker Desktop runs it via
+    # Rosetta 2 — enable "Use Rosetta for x86/amd64 emulation" in Docker Desktop
+    # Settings → General before deploying.
     sonic1:
       kind: sonic-vs
       image: docker-sonic-vs:latest
+      mgmt-ipv4: 172.20.20.12
+      group: router
+      startup-config: configs/sonic1-config.json
+      binds:
+        # Mount the FRR config directly. Required when docker_routing_config_mode
+        # is "split-unified" — SONiC will NOT generate frr.conf from ConfigDB.
+        - configs/sonic1-frr.conf:/etc/sonic/frr/frr.conf:ro
+      exec:
+        # SONiC ships with ebtables rules designed for hardware ASICs.
+        # On virtual switches, these rules block all forwarded traffic.
+        # Remove them immediately after the container starts.
+        - bash -c "ebtables -D FORWARD -j DROP 2>/dev/null || true"
 
   links:
-    # Single point-to-point link between the two devices.
-    # ceos1 eth1  <-->  sonic1 eth1
+    # Single point-to-point link.
+    #   ceos1  Ethernet1       <-->  sonic1 Ethernet0
+    #   (containerlab eth1)         (containerlab eth1)
     - endpoints: ["ceos1:eth1", "sonic1:eth1"]

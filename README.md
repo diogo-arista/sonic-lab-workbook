@@ -181,13 +181,19 @@ The topology connects one cEOS node to one SONiC node with a single point-to-poi
   ┌─────────────────┐          ┌─────────────────┐
   │     ceos1       │          │     sonic1      │
   │  (Arista EOS)   │          │    (SONiC VS)   │
+  │  mgmt: .11      │          │  mgmt: .12      │
   │                 │          │                 │
-  │  Ethernet1      ├──────────┤  eth1           │
+  │  Ethernet1      ├──────────┤  Ethernet0      │
   │  192.168.1.1/30 │          │  192.168.1.2/30 │
   └─────────────────┘          └─────────────────┘
         │                              │
-        └──── Management (172.20.20.0/24) ────┘
+        └──── Management 172.20.20.0/24 ──────┘
 ```
+
+> **SONiC interface naming** — containerlab assigns Linux interface names (`eth0`, `eth1`, …) to the container. Inside SONiC, data interfaces are named `Ethernet0`, `Ethernet4`, `Ethernet8`, … (incrementing by 4 lanes per port for the Force10-S6000 hwsku). The mapping is:
+> - `eth0` → management (connected to containerlab mgmt network)
+> - `eth1` → `Ethernet0` (first data port)
+> - `eth2` → `Ethernet4` (second data port)
 
 **Deploy**
 
@@ -195,23 +201,28 @@ The topology connects one cEOS node to one SONiC node with a single point-to-poi
 clab deploy --topo labs/01-hello-world/topology.yml --reconfigure
 ```
 
-Containerlab prints a summary table with each node's management IP once all containers are running.
-
-Example output:
+The topology uses `prefix: ""` so container names are simply `ceos1` and `sonic1`. Containerlab prints a summary table with management IPs once all containers are running:
 
 ```
-+---+-----------------------------+--------------+------------------------+-------+
-| # | Name                        | Container ID | Image                  | State |
-+---+-----------------------------+--------------+------------------------+-------+
-| 1 | clab-01-hello-world-ceos1   | a1b2c3d4e5f6 | ceos:4.32.0F           | running |
-| 2 | clab-01-hello-world-sonic1  | b2c3d4e5f6a1 | docker-sonic-vs:latest | running |
-+---+-----------------------------+--------------+------------------------+-------+
++---+--------+----+--------------+------------------------+---------+----------------+
+| # | Name   | .. | Container ID | Image                  | State   | IPv4 Address   |
++---+--------+----+--------------+------------------------+---------+----------------+
+| 1 | ceos1  |    | a1b2c3d4e5f6 | ceos:latest            | running | 172.20.20.11/24|
+| 2 | sonic1 |    | b2c3d4e5f6a1 | docker-sonic-vs:latest | running | 172.20.20.12/24|
++---+--------+----+--------------+------------------------+---------+----------------+
 ```
 
 **Check status**
 
 ```bash
-clab inspect --all
+clab inspect --topo labs/01-hello-world/topology.yml
+```
+
+**If SONiC interface IP is not applied after boot**, re-apply the startup config manually:
+
+```bash
+docker cp labs/01-hello-world/configs/sonic1-config.json sonic1:/etc/sonic/config_db.json
+docker exec sonic1 sudo config reload -y
 ```
 
 ---
@@ -221,7 +232,7 @@ clab inspect --all
 ### ceos1 (Arista EOS CLI)
 
 ```bash
-docker exec -it clab-01-hello-world-ceos1 Cli
+docker exec -it ceos1 Cli
 ```
 
 Inside EOS:
@@ -230,40 +241,38 @@ Inside EOS:
 ceos1> enable
 ceos1# show interfaces Ethernet1
 ceos1# show ip interface brief
-ceos1# ping 192.168.1.2     ! ping sonic1
+ceos1# ping 192.168.1.2     ! ping sonic1 Ethernet0
 ```
 
 ### sonic1 (SONiC bash shell)
 
 ```bash
-docker exec -it clab-01-hello-world-sonic1 bash
+docker exec -it sonic1 bash
 ```
 
 Inside SONiC:
 
 ```bash
-# Check interface status
+# Check interface and IP status
 show interfaces status
-
-# Check IP configuration
 show ip interfaces
 
-# Ping ceos1
+# Ping ceos1 Ethernet1
 ping 192.168.1.1 -c 3
 ```
 
-### SSH access (alternative)
+### SSH access
 
-Containerlab assigns management IPs from the `172.20.20.0/24` subnet. Find them with:
+Management IPs are static (defined in `topology.yml`):
+
+| Node   | Management IP  | Credentials   |
+|--------|---------------|---------------|
+| ceos1  | 172.20.20.11  | admin / admin |
+| sonic1 | 172.20.20.12  | admin / admin |
 
 ```bash
-clab inspect --all
-```
-
-Then SSH directly (cEOS credentials: `admin` / `admin`):
-
-```bash
-ssh admin@172.20.20.X
+ssh admin@172.20.20.11   # ceos1
+ssh admin@172.20.20.12   # sonic1
 ```
 
 ---
@@ -281,7 +290,7 @@ PING 192.168.1.2 (192.168.1.2) 72(100) bytes of data.
 From sonic1 bash shell, ping ceos1:
 
 ```bash
-ping 192.168.1.1 -I eth1 -c 3
+ping 192.168.1.1 -I Ethernet0 -c 3
 ```
 
 A successful ping confirms the virtual link is operational.
@@ -300,14 +309,59 @@ This removes all containers, virtual interfaces, and the management Docker netwo
 
 ---
 
+## SONiC VS Configuration Architecture
+
+Understanding how SONiC configuration works is essential for future labs.
+
+### Two separate config files
+
+SONiC uses `docker_routing_config_mode = split-unified` in this project. That means configuration is split into two independent files:
+
+| File | Purpose |
+|---|---|
+| `/etc/sonic/config_db.json` | System state: ports, interfaces, VLANs, VXLAN tunnels, device metadata |
+| `/etc/sonic/frr/frr.conf` | Routing protocols: BGP neighbors, EVPN, route maps, prefix lists |
+
+In split-unified mode, SONiC will **never overwrite** `frr.conf` from ConfigDB — you own it completely. This is the right approach for labs and matches production deployments.
+
+### Applying changes
+
+**ConfigDB changes** (interfaces, VLANs, etc.):
+```bash
+docker exec sonic1 sudo config reload -y
+```
+
+**FRR changes** (BGP, routing):
+```bash
+docker exec sonic1 vtysh -f /etc/sonic/frr/frr.conf
+# Or interactively:
+docker exec -it sonic1 vtysh
+```
+
+### SONiC VS virtual switch quirk — ebtables
+
+SONiC ships with ebtables rules designed for hardware ASIC switches. On virtual switches, these rules **block all forwarded traffic** silently. The topology applies this fix automatically via `exec` on container start:
+
+```bash
+ebtables -D FORWARD -j DROP
+```
+
+If traffic between nodes is not flowing after deploy, verify the rule is gone:
+```bash
+docker exec sonic1 ebtables -L FORWARD
+# Should show: no rules
+```
+
+---
+
 ## Common containerlab Commands
 
 ```bash
 # Deploy a topology
 clab deploy --topo <topology.yml> --reconfigure
 
-# List running nodes and management IPs
-clab inspect --all
+# List running nodes and management IPs for a specific lab
+clab inspect --topo <topology.yml>
 
 # Destroy a lab and clean up networks
 clab destroy --topo <topology.yml> --cleanup
