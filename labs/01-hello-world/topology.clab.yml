@@ -20,7 +20,7 @@ topology:
     #   docker import cEOS-lab-4.35.3F.tar.xz ceos:latest
     # On Apple Silicon, prefer the ARM64 cEOS build (native, no emulation).
     ceos1:
-      kind: ceos
+      kind: arista_ceos
       image: ceos:latest
       mgmt-ipv4: 172.20.20.11
       group: router

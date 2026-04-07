@@ -1,6 +1,6 @@
 LAB     := 01-hello-world
 LAB_DIR := labs/$(LAB)
-TOPO    := $(LAB_DIR)/topology.yml
+TOPO    := $(LAB_DIR)/topology.clab.yml
 
 # With prefix: "" in the topology, container names are just the node names.
 CEOS_CONTAINER  := ceos1

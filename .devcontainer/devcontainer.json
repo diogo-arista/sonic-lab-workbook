@@ -33,7 +33,7 @@
         "terminal.integrated.defaultProfile.linux": "bash",
         "editor.formatOnSave": true,
         "yaml.schemas": {
-          "https://raw.githubusercontent.com/srl-labs/containerlab/main/schemas/clab.schema.json": "labs/**/*.yml"
+          "https://raw.githubusercontent.com/srl-labs/containerlab/main/schemas/clab.schema.json": "labs/**/*.clab.yml"
         }
       }
     }

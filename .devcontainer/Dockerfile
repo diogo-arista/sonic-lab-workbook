@@ -31,11 +31,18 @@ RUN echo "deb [trusted=yes] https://apt.fury.io/netdevops/ /" \
     && apt-get install -y containerlab \
     && rm -rf /var/lib/apt/lists/*
 
+# Switch iptables to legacy mode. GitHub Codespaces (and some Linux hosts) use
+# the nftables backend by default, which is incompatible with containerlab's
+# iptables rules. iptables-legacy uses the traditional kernel API that clab expects.
+RUN update-alternatives --set iptables  /usr/sbin/iptables-legacy  2>/dev/null || true \
+    && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
+
 # Grant containerlab the Linux capabilities it needs so it runs without sudo.
 # cap_net_admin: create/modify network interfaces and namespaces
 # cap_net_raw:   raw socket access (needed for some lab operations)
 # cap_sys_admin: mount namespaces, needed for veth pair setup
-RUN setcap cap_net_admin,cap_net_raw,cap_sys_admin+eip /usr/bin/containerlab
+# cap_chown:     chown the authorized_keys file containerlab creates for SSH access
+RUN setcap cap_net_admin,cap_net_raw,cap_sys_admin,cap_chown+eip /usr/bin/containerlab
 
 # The containerlab apt package creates the 'clab_admins' group.
 # Add vscode to it here so the containerlab VS Code extension activates without

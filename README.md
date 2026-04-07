@@ -15,7 +15,7 @@ A containerized network lab environment using [containerlab](https://containerla
 │   └── post-create.sh      # One-time setup script
 ├── labs/
 │   └── 01-hello-world/
-│       ├── topology.yml    # Containerlab topology: ceos1 <--> sonic1
+│       ├── topology.clab.yml    # Containerlab topology: ceos1 <--> sonic1
 │       └── configs/
 │           └── ceos1.cfg   # cEOS startup configuration
 ├── Makefile                # Convenience targets (deploy, destroy, inspect, …)
@@ -107,7 +107,7 @@ docker images | grep ceos
 # ceos   4.32.0F   <id>   <date>   <size>
 ```
 
-> If you downloaded a different version, update the `image:` field in [labs/01-hello-world/topology.yml](labs/01-hello-world/topology.yml) accordingly.
+> If you downloaded a different version, update the `image:` field in [labs/01-hello-world/topology.clab.yml](labs/01-hello-world/topology.clab.yml) accordingly.
 
 ---
 
@@ -197,7 +197,7 @@ The topology connects one cEOS node to one SONiC node with a single point-to-poi
 **Deploy**
 
 ```bash
-clab deploy --topo labs/01-hello-world/topology.yml --reconfigure
+clab deploy --topo labs/01-hello-world/topology.clab.yml --reconfigure
 ```
 
 The topology uses `prefix: ""` so container names are simply `ceos1` and `sonic1`. Containerlab prints a summary table with management IPs once all containers are running:
@@ -214,7 +214,7 @@ The topology uses `prefix: ""` so container names are simply `ceos1` and `sonic1
 **Check status**
 
 ```bash
-clab inspect --topo labs/01-hello-world/topology.yml
+clab inspect --topo labs/01-hello-world/topology.clab.yml
 ```
 
 **If SONiC interface IP is not applied after boot**, re-apply the startup config manually:
@@ -262,7 +262,7 @@ ping 192.168.1.1 -c 3
 
 ### SSH access
 
-Management IPs are static (defined in `topology.yml`):
+Management IPs are static (defined in `topology.clab.yml`):
 
 | Node   | Management IP  | Credentials   |
 |--------|---------------|---------------|
@@ -301,7 +301,7 @@ A successful ping confirms the virtual link is operational.
 When you are done, destroy the lab to free resources:
 
 ```bash
-clab destroy --topo labs/01-hello-world/topology.yml --cleanup
+clab destroy --topo labs/01-hello-world/topology.clab.yml --cleanup
 ```
 
 This removes all containers, virtual interfaces, and the management Docker network.
@@ -357,16 +357,16 @@ docker exec sonic1 ebtables -L FORWARD
 
 ```bash
 # Deploy a topology
-clab deploy --topo <topology.yml> --reconfigure
+clab deploy --topo <topology.clab.yml> --reconfigure
 
 # List running nodes and management IPs for a specific lab
-clab inspect --topo <topology.yml>
+clab inspect --topo <topology.clab.yml>
 
 # Destroy a lab and clean up networks
-clab destroy --topo <topology.yml> --cleanup
+clab destroy --topo <topology.clab.yml> --cleanup
 
 # Generate an interactive HTML topology diagram
-clab graph --topo <topology.yml>
+clab graph --topo <topology.clab.yml>
 ```
 
 The [Makefile](Makefile) wraps these commands for multi-step workflows (e.g., setting LAB variables across deploy/destroy/inspect in one shot).
@@ -388,11 +388,11 @@ If missing, rebuild the dev container (Command Palette → "Dev Containers: Rebu
 
 ### Docker image not found
 
-Ensure the image name and tag in `topology.yml` exactly match what is in your local Docker image store:
+Ensure the image name and tag in `topology.clab.yml` exactly match what is in your local Docker image store:
 
 ```bash
 docker images
-# Compare output with the image: fields in topology.yml
+# Compare output with the image: fields in topology.clab.yml
 ```
 
 ### cEOS takes long to boot
